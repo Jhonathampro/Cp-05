@@ -1,10 +1,6 @@
 # API de Registro Meteorológico
 
-## Sobre o projeto
-
-Esta aplicação consiste em uma API REST desenvolvida com Spring Boot para gerenciar registros meteorológicos. Ela permite armazenar informações sobre estações meteorológicas, datas de registro, temperatura, umidade relativa do ar, precipitação e condições climáticas.
-
-A aplicação utiliza MySQL para persistência dos dados, Flyway para controlar as migrações do banco de dados e Swagger/OpenAPI para documentar e testar os endpoints.
+API REST desenvolvida com Spring Boot para cadastrar, consultar, atualizar e excluir registros meteorológicos. A aplicação utiliza MySQL para armazenamento dos dados, Flyway para gerenciamento das migrações do banco e Swagger para documentação e testes dos endpoints.
 
 ## Tecnologias utilizadas
 
@@ -15,68 +11,105 @@ A aplicação utiliza MySQL para persistência dos dados, Flyway para controlar 
 - Docker
 - Docker Compose
 - Flyway
-- Swagger/OpenAPI
+- Swagger / OpenAPI
 
----
+## Pré-requisitos
 
-## 1. Preparação do ambiente
+Antes de executar o projeto, é necessário ter o Docker Desktop instalado e em execução.
 
-Antes de iniciar a aplicação, certifique-se de que os seguintes programas estão instalados e funcionando:
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- Git, para clonar o repositório.
 
-- Docker Desktop
-- Java 25
+## Como executar o projeto
 
-Se estiver utilizando o laboratório da FIAP, verifique se os serviços necessários estão ativos.
+### 1. Clonar o repositório
 
-Abra o PowerShell na pasta raiz do projeto.
+Clone o repositório e acesse a pasta do projeto:
 
----
-
-## 2. Inicialização do banco de dados
-
-O MySQL é executado em um contêiner gerenciado pelo Docker Compose.
-
-Acesse a pasta que contém o arquivo `docker-compose.yml`:
-
-```powershell
-cd compose
+```bash
+git clone https://github.com/Jhonathampro/Cp-05.git
+cd Cp-05
 ```
 
-Inicie o contêiner do MySQL:
+### 2. Iniciar o banco de dados
+
+Na raiz do projeto, execute:
 
 ```powershell
-docker compose up -d
+docker compose -f compose/docker-compose.yml up -d
 ```
 
-Verifique se o serviço está em execução:
+Esse comando cria e inicia o contêiner do MySQL utilizando a configuração definida no Docker Compose.
 
-```powershell
-docker compose ps
-```
-
-Para visualizar os contêineres ativos no Docker:
+Para verificar se o banco está em execução:
 
 ```powershell
 docker ps
 ```
 
-### Parar o banco de dados
+### 3. Construir a imagem da API
 
-Para interromper o serviço:
+Na raiz do projeto, execute:
 
 ```powershell
-docker compose down
+docker build -t api-registro-meteorologico .
 ```
 
-**Observação:** os dados do MySQL são armazenados em uma pasta local configurada no Docker Compose. Ao utilizar `docker compose down`, os dados persistidos no volume não são removidos.
+O Docker utiliza o `Dockerfile` para compilar e empacotar a aplicação e gerar a imagem necessária para executar a API.
 
----
+### 4. Executar a API
 
-## 3. Configuração da conexão com o banco
+A API deve ser executada em um contêiner conectado à mesma rede Docker do MySQL.
 
-A aplicação utiliza o perfil `dev`, configurado no arquivo `application-dev.properties`.
+Primeiro, consulte a rede associada ao contêiner do banco:
 
-As configurações padrão da conexão são:
+```powershell
+docker inspect mysql_846 --format "{{json .NetworkSettings.Networks}}"
+```
+
+No ambiente utilizado durante o desenvolvimento, a rede retornada foi `compose_default`.
+
+Utilize o nome da rede retornado no comando anterior para executar a API:
+
+```powershell
+docker run -d `
+  --name api-registro-meteorologico `
+  --network compose_default `
+  -p 8081:8080 `
+  -e DB_HOST=mysqldb `
+  -e DB_PORT=3306 `
+  -e DB_NAME=registro_meteorologico `
+  -e DB_USERNAME=root `
+  -e DB_PASSWORD=root `
+  api-registro-meteorologico
+```
+
+O comando configura a conexão com o banco de dados e publica a API na porta `8081` do computador.
+
+**Importante:** se o nome da rede for diferente, substitua `compose_default` pelo nome retornado no comando de inspeção. A senha configurada é destinada ao ambiente local de desenvolvimento.
+
+### 5. Acessar o Swagger
+
+Com a API em execução, acesse:
+
+http://localhost:8081/swagger-ui/index.html
+
+O Swagger permite visualizar a documentação dos endpoints e executar requisições para testar as operações disponibilizadas pela API.
+
+## Configuração do banco de dados
+
+O projeto utiliza MySQL 8.4.6 com as seguintes configurações:
+
+| Configuração | Valor |
+|---|---|
+| Contêiner | `mysql_846` |
+| Imagem | `mysql:8.4.6` |
+| Porta | `3306` |
+| Usuário | `root` |
+| Senha | `root` |
+| Banco da aplicação | `registro_meteorologico` |
+
+A aplicação utiliza variáveis de ambiente para configurar a conexão com o banco:
 
 | Variável | Valor padrão |
 |---|---|
@@ -86,169 +119,88 @@ As configurações padrão da conexão são:
 | `DB_USERNAME` | `root` |
 | `DB_PASSWORD` | `root` |
 
-A URL de conexão utiliza o parâmetro `createDatabaseIfNotExist=true`, que permite criar o banco caso ele ainda não exista, desde que o usuário tenha permissão para isso.
+Ao executar a API em um contêiner Docker, o endereço do banco deve ser o nome acessível do serviço na rede Docker, como `mysqldb`, e não `localhost`.
 
-Após estabelecer a conexão, o Flyway executa as migrações SQL disponíveis no diretório:
+## Migrações com Flyway
 
-```text
-src/main/resources/db/migration
-```
+O Flyway gerencia as migrações do banco de dados durante a inicialização da aplicação.
 
-Dessa forma, a estrutura do banco é criada e os scripts de migração são controlados por versão.
+As migrações iniciais são:
 
----
+- `V1__create_table_tb_registro_meteorologico.sql`: cria a tabela de registros meteorológicos.
+- `V2__insert_initial_registros_meteorologicos.sql`: insere os registros iniciais.
 
-## 4. Execução da API pelo Maven
+As migrações são armazenadas em `src/main/resources/db/migration` e executadas conforme a configuração do projeto.
 
-Com o banco de dados em execução, volte para a pasta raiz do projeto:
+## Gerenciamento dos contêineres
 
-```powershell
-cd ..
-```
-
-Caso já esteja na raiz, não é necessário executar esse comando.
-
-Inicie a aplicação utilizando o Maven Wrapper:
-
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-Aguarde até que o Spring Boot informe que a aplicação foi iniciada com sucesso.
-
-### Gerar o arquivo JAR
-
-Para compilar o projeto e gerar o arquivo JAR sem executar os testes:
-
-```powershell
-.\mvnw.cmd clean package -DskipTests
-```
-
-O arquivo gerado ficará no diretório `target`.
-
-**Importante:** a API utiliza a porta `8080` por padrão. Se outro serviço estiver utilizando essa porta, será necessário liberar a porta ou configurar outra para a aplicação.
-
----
-
-## 5. Construção da imagem Docker da API
-
-O projeto possui um `Dockerfile` para construir a imagem da aplicação.
-
-Na pasta raiz, onde está localizado o arquivo `Dockerfile`, execute:
-
-```powershell
-docker build -t api-registro-meteorologico .
-```
-
-Para verificar se a imagem foi criada:
-
-```powershell
-docker images
-```
-
-O Dockerfile utiliza uma etapa de construção com Maven e uma imagem Java para executar o arquivo JAR gerado.
-
-**Observação:** nesta configuração, o MySQL é iniciado pelo Docker Compose, enquanto a API pode ser executada diretamente pelo Maven. Construir a imagem da API não inicia automaticamente um contêiner para ela.
-
----
-
-## 6. Gerenciamento dos contêineres
-
-### Listar contêineres em execução
+### Verificar os contêineres em execução
 
 ```powershell
 docker ps
 ```
 
-### Listar todos os contêineres
-
-Incluindo os que estão parados:
+Para listar também os contêineres parados:
 
 ```powershell
 docker ps -a
 ```
 
-### Iniciar um contêiner parado
-
-Para iniciar o contêiner do MySQL:
+### Consultar os logs da API
 
 ```powershell
-docker start mysql_846
+docker logs api-registro-meteorologico
 ```
 
-### Parar um contêiner
+Para acompanhar os logs em tempo real:
 
 ```powershell
-docker stop mysql_846
+docker logs -f api-registro-meteorologico
 ```
 
-### Acessar o MySQL pelo terminal
+Pressione `Ctrl + C` para sair do acompanhamento dos logs.
 
-Para abrir o cliente MySQL dentro do contêiner:
+### Parar a API
 
 ```powershell
-docker exec -it mysql_846 mysql -u root -p
+docker stop api-registro-meteorologico
 ```
 
-Digite a senha configurada no Docker Compose quando solicitado.
-
-### Remover um contêiner
-
-Primeiro, interrompa o contêiner:
+### Iniciar novamente a API
 
 ```powershell
-docker stop mysql_846
+docker start api-registro-meteorologico
 ```
 
-Depois, remova-o:
+### Parar o banco de dados
 
 ```powershell
-docker rm mysql_846
+docker compose -f compose/docker-compose.yml down
 ```
 
-**Atenção:** remover um contêiner não é o mesmo que remover a imagem. Os dados persistidos dependem do volume configurado no Docker Compose.
+Esse comando para e remove o contêiner gerenciado pelo Compose. Os dados armazenados no diretório local configurado como volume são preservados.
 
----
+## Atualizar a aplicação
 
-## 7. Acesso ao Swagger/OpenAPI
+Após alterações no código-fonte, construa novamente a imagem:
 
-Com a API em execução, abra o navegador e acesse:
-
-**Swagger UI:**
-
-http://localhost:8080/swagger-ui/index.html
-
-O Swagger permite visualizar a documentação dos endpoints e testar as requisições diretamente pelo navegador.
-
-### Como testar um endpoint
-
-1. Localize o endpoint desejado.
-2. Expanda a seção correspondente.
-3. Clique em **Try it out**.
-4. Preencha os parâmetros ou o corpo da requisição.
-5. Clique em **Execute**.
-6. Confira o código HTTP e os dados retornados pela API.
-
----
-
-## 8. Migrações do banco com Flyway
-
-As migrações SQL estão localizadas em:
-
-```text
-src/main/resources/db/migration
+```powershell
+docker build -t api-registro-meteorologico .
 ```
 
-Os scripts versionados são responsáveis por definir as alterações iniciais do banco e executar as operações de dados previstas no projeto.
+Para utilizar a nova imagem, remova o contêiner anterior e crie outro:
 
-O Flyway mantém o controle das migrações já aplicadas, permitindo acompanhar a versão do esquema do banco.
+```powershell
+docker stop api-registro-meteorologico
+docker rm api-registro-meteorologico
+```
 
-A configuração `spring.jpa.hibernate.ddl-auto=none` impede que o Hibernate altere automaticamente a estrutura das tabelas, deixando essa responsabilidade para as migrações.
+Depois, execute novamente o comando `docker run` da seção de execução da API.
 
----
+## Observações
 
-## Considerações finais
-
-O projeto integra uma API REST desenvolvida com Spring Boot, persistência de dados em MySQL, controle de migrações com Flyway e documentação interativa por meio do Swagger/OpenAPI.
-
-O Docker Compose facilita a inicialização do banco de dados, enquanto o Maven Wrapper permite executar e compilar a aplicação. Essa estrutura reúne os principais recursos necessários para registrar e consultar informações meteorológicas por meio de uma API.
+- O Docker Desktop deve estar em execução.
+- O MySQL precisa estar disponível antes da inicialização da API.
+- A API e o banco são executados em contêineres separados.
+- A porta `8081` é utilizada para acessar a API no computador; a aplicação utiliza a porta interna `8080`.
+- O diretório de dados do MySQL não deve ser excluído se for necessário preservar os registros.
